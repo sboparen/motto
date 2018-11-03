@@ -19,7 +19,7 @@ class TestFurigana(unittest.TestCase):
 
     def add_furigana(self, text):
         ret = add_furigana(text)
-        # TODO self.assertEqual(add_furigana(ret), ret)
+        self.assertEqual(add_furigana(ret), ret)
         return ret
 
     def test_scripts(self):
@@ -29,3 +29,6 @@ class TestFurigana(unittest.TestCase):
         self.assertEqual(self.add_furigana('Romaji'), 'Romaji')
         self.assertEqual(self.add_furigana('①②③'), '①②③')
         self.assertEqual(self.add_furigana('<div>&nbsp;'), '<div>&nbsp;')
+
+    def test_misc(self):
+        self.assertEqual(self.add_furigana('ケロッとしてる'), 'ケロッとしてる')

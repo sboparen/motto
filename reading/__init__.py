@@ -173,10 +173,19 @@ mecab = MecabController()
 
 def fixup(line):
     ret, extra = '', ''
-    for ch in line:
+    r = r' ?([^ >]+?)\[(.+?)\]'
+    r = '(%s)|(【[^】]*】)' % r
+    r = '(%s)|(《[^》]*》)' % r
+    locked = set()
+    for m in re.finditer(r, line):
+        for i in range(m.start(), m.end()):
+            locked.add(i)
+    for i, ch in enumerate(line):
         n = ord(ch)
         replace = False
-        if ord(ch) <= 0xff or ord(ch) == 0x3000:
+        if i in locked:
+            replace = True
+        elif ord(ch) <= 0xff or ord(ch) == 0x3000:
             replace = True
         elif ch.encode('euc_jp', 'ignore').decode('euc_jp') != ch:
             replace = True
