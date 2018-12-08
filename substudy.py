@@ -19,19 +19,18 @@ from aqt.webview import AnkiWebView
 from .highlight import *
 
 def createMenu():
-    a = QAction(mw)
-    a.setText('Study Subtitle File...')
+    a = QAction(mw, text='Study Text or Subtitle File...')
     mw.form.menuTools.addAction(a)
     a.triggered.connect(onStudy)
 
 def onStudy():
-    path = getFile(mw, 'Study Subtitle File',
+    path = getFile(mw, 'Study Text or Subtitle File',
         cb=None, key='study', filter='*.srt *.txt')
     if path is None:
         return
     with open(path) as f:
-        subs = f.read().strip().split('\n\n')
-    d = MainWindow(mw, path, subs)
+        text = f.read()
+    d = MainWindow(mw, path, text)
     d.exec_()
 
 def get_known_cards():
@@ -46,41 +45,64 @@ def get_known_cards():
     return ret
 
 class MainWindow(QDialog):
-    def __init__(self, parent, path, subs):
+    def __init__(self, parent, path, text):
         QDialog.__init__(self, parent)
         self.path = path
-        self.subs = subs
+        self.text = text
+        # Scrollable text area.
+        area = QScrollArea()
+        inner_widget = QWidget()
+        self.inner_layout = QVBoxLayout()
+        area.setWidget(inner_widget)
+        area.setWidgetResizable(True)
+        inner_widget.setLayout(self.inner_layout)
+        # Controls along the bottom.
+        bottom = QWidget()
+        bottom.setLayout(QHBoxLayout())
+        self.splitmode = QCheckBox('Split on Blank Lines', checked=True)
+        self.splitmode.stateChanged.connect(self.create_chunks)
+        close = QDialogButtonBox(QDialogButtonBox.Close)
+        close.rejected.connect(self.reject)
+        bottom.layout().addWidget(self.splitmode)
+        bottom.layout().addWidget(close)
+        # Main layout.
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(area)
+        layout.addWidget(bottom)
+        self.setLayout(layout)
+        self.resize(1000, 800) # TODO remember size
+        # Process the text.
         self.db = KnownDatabase()
         self.db.anki.lines = get_known_cards()
         self.db.anki.write()
         self.db.reload()
-        self.db.process_subtitles(subs)
-        area = QScrollArea()
-        inner_widget = QWidget()
-        inner_layout = QVBoxLayout()
+        self.create_chunks()
+    def create_chunks(self):
+        split = '\n\n' if self.splitmode.isChecked() else '\n'
+        self.subs = self.text.strip().split(split)
+        self.db.process_subtitles(self.subs)
+        # Remove all widgets from self.inner_layout
+        # Adapted from https://stackoverflow.com/questions/4528347
+        while self.inner_layout.count() > 0:
+            child = self.inner_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
         self.chunks = []
-        for line in subs:
+        for i, line in enumerate(self.subs):
             chunk = TextChunk(self, line)
             self.chunks.append(chunk)
-            inner_layout.addWidget(chunk)
-        area.setWidget(inner_widget)
-        area.setWidgetResizable(True)
-        inner_widget.setLayout(inner_layout)
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(area)
-        bb = QDialogButtonBox(QDialogButtonBox.Close)
-        layout.addWidget(bb)
-        bb.rejected.connect(self.reject)
-        self.setLayout(layout)
-        self.resize(1000, 800) # TODO remember size
+            if i > 0:
+                self.inner_layout.addWidget(QFrame(
+                    frameShape=QFrame.HLine, frameShadow=QFrame.Sunken))
+            self.inner_layout.addWidget(chunk)
     def update_all_lines(self):
         for chunk in self.chunks:
             chunk.update_highlighting()
 
 class TextChunk(QLabel):
     def __init__(self, main_window, line):
-        QLabel.__init__(self)
+        QLabel.__init__(self, wordWrap=True)
         self.main_window = main_window
         self.line = line
         self.setTextInteractionFlags(Qt.TextSelectableByMouse)
